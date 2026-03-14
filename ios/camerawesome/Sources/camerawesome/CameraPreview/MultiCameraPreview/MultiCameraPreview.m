@@ -376,6 +376,114 @@
   }
 }
 
+#pragma mark - Manual Exposure Control
+
+- (void)setManualExposureMode:(BOOL)manual error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
+  AVCaptureDevice *mainDevice = self.devices.firstObject.device;
+  if (mainDevice == nil) {
+    *error = [FlutterError errorWithCode:@"NO_CAMERA" message:@"Camera not initialized" details:nil];
+    return;
+  }
+  NSError *lockError;
+  if ([mainDevice lockForConfiguration:&lockError]) {
+    if (manual) {
+      if ([mainDevice isExposureModeSupported:AVCaptureExposureModeCustom]) {
+        [mainDevice setExposureMode:AVCaptureExposureModeCustom];
+      } else {
+        [mainDevice unlockForConfiguration];
+        *error = [FlutterError errorWithCode:@"EXPOSURE_UNSUPPORTED" message:@"Custom exposure mode not supported" details:nil];
+        return;
+      }
+    } else {
+      if ([mainDevice isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]) {
+        [mainDevice setExposureMode:AVCaptureExposureModeContinuousAutoExposure];
+      }
+    }
+    [mainDevice unlockForConfiguration];
+  } else {
+    *error = [FlutterError errorWithCode:@"LOCK_ERROR" message:@"Cannot lock device" details:[lockError localizedDescription]];
+  }
+}
+
+- (void)setIso:(double)iso error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
+  AVCaptureDevice *mainDevice = self.devices.firstObject.device;
+  NSError *lockError;
+  if ([mainDevice lockForConfiguration:&lockError]) {
+    float clampedIso = MAX(mainDevice.activeFormat.minISO,
+                           MIN(mainDevice.activeFormat.maxISO, (float)iso));
+    [mainDevice setExposureModeCustomWithDuration:AVCaptureExposureDurationCurrent
+                                              ISO:clampedIso
+                                completionHandler:nil];
+    [mainDevice unlockForConfiguration];
+  } else {
+    *error = [FlutterError errorWithCode:@"LOCK_ERROR" message:@"Cannot lock device" details:[lockError localizedDescription]];
+  }
+}
+
+- (void)setExposureDuration:(int64_t)durationNs error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
+  AVCaptureDevice *mainDevice = self.devices.firstObject.device;
+  NSError *lockError;
+  if ([mainDevice lockForConfiguration:&lockError]) {
+    CMTime duration = CMTimeMake(durationNs, 1000000000);
+    CMTime minDuration = mainDevice.activeFormat.minExposureDuration;
+    CMTime maxDuration = mainDevice.activeFormat.maxExposureDuration;
+    if (CMTimeCompare(duration, minDuration) < 0) duration = minDuration;
+    if (CMTimeCompare(duration, maxDuration) > 0) duration = maxDuration;
+    [mainDevice setExposureModeCustomWithDuration:duration
+                                              ISO:AVCaptureISOCurrent
+                                completionHandler:nil];
+    [mainDevice unlockForConfiguration];
+  } else {
+    *error = [FlutterError errorWithCode:@"LOCK_ERROR" message:@"Cannot lock device" details:[lockError localizedDescription]];
+  }
+}
+
+- (void)setManualExposureIso:(double)iso durationNs:(int64_t)durationNs error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
+  AVCaptureDevice *mainDevice = self.devices.firstObject.device;
+  NSError *lockError;
+  if ([mainDevice lockForConfiguration:&lockError]) {
+    if (![mainDevice isExposureModeSupported:AVCaptureExposureModeCustom]) {
+      [mainDevice unlockForConfiguration];
+      *error = [FlutterError errorWithCode:@"EXPOSURE_UNSUPPORTED" message:@"Custom exposure mode not supported" details:nil];
+      return;
+    }
+    float clampedIso = MAX(mainDevice.activeFormat.minISO,
+                           MIN(mainDevice.activeFormat.maxISO, (float)iso));
+    CMTime duration = CMTimeMake(durationNs, 1000000000);
+    CMTime minDuration = mainDevice.activeFormat.minExposureDuration;
+    CMTime maxDuration = mainDevice.activeFormat.maxExposureDuration;
+    if (CMTimeCompare(duration, minDuration) < 0) duration = minDuration;
+    if (CMTimeCompare(duration, maxDuration) > 0) duration = maxDuration;
+    [mainDevice setExposureMode:AVCaptureExposureModeCustom];
+    [mainDevice setExposureModeCustomWithDuration:duration
+                                              ISO:clampedIso
+                                completionHandler:nil];
+    [mainDevice unlockForConfiguration];
+  } else {
+    *error = [FlutterError errorWithCode:@"LOCK_ERROR" message:@"Cannot lock device" details:[lockError localizedDescription]];
+  }
+}
+
+- (NSDictionary *)getExposureRangeWithError:(FlutterError * _Nullable __autoreleasing * _Nonnull)error {
+  AVCaptureDevice *mainDevice = self.devices.firstObject.device;
+  if (mainDevice == nil) {
+    *error = [FlutterError errorWithCode:@"NO_CAMERA" message:@"Camera not initialized" details:nil];
+    return nil;
+  }
+  CMTime minDuration = mainDevice.activeFormat.minExposureDuration;
+  CMTime maxDuration = mainDevice.activeFormat.maxExposureDuration;
+  int64_t minDurationNs = (int64_t)(CMTimeGetSeconds(minDuration) * 1000000000.0);
+  int64_t maxDurationNs = (int64_t)(CMTimeGetSeconds(maxDuration) * 1000000000.0);
+  return @{
+    @"minIso": @((double)mainDevice.activeFormat.minISO),
+    @"maxIso": @((double)mainDevice.activeFormat.maxISO),
+    @"minExposureDurationNs": @(minDurationNs),
+    @"maxExposureDurationNs": @(maxDurationNs),
+    @"currentIso": @((double)mainDevice.ISO),
+    @"currentExposureDurationNs": @((int64_t)(CMTimeGetSeconds(mainDevice.exposureDuration) * 1000000000.0)),
+  };
+}
+
 - (void)captureOutput:(AVCaptureOutput *)output didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection {
   int index = 0;
   for (CameraDeviceInfo *device in _devices) {

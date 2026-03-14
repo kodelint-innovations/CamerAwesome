@@ -434,4 +434,29 @@ abstract class CameraInterface {
   bool isVideoRecordingAndImageAnalysisSupported(PigeonSensorPosition sensor);
 
   bool isMultiCamSupported();
+
+  // Manual exposure control
+  void setManualExposureMode(bool manual);
+  void setIso(double iso);
+  void setExposureDuration(int durationNs);
+  void setManualExposure(double iso, int durationNs);
+  ExposureRangeInfo getExposureRange();
+}
+
+class ExposureRangeInfo {
+  final double minIso;
+  final double maxIso;
+  final int minExposureDurationNs;
+  final int maxExposureDurationNs;
+  final double currentIso;
+  final int currentExposureDurationNs;
+
+  ExposureRangeInfo({
+    required this.minIso,
+    required this.maxIso,
+    required this.minExposureDurationNs,
+    required this.maxExposureDurationNs,
+    required this.currentIso,
+    required this.currentExposureDurationNs,
+  });
 }

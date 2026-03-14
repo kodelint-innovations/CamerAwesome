@@ -525,4 +525,44 @@ class CamerawesomePlugin {
   static Future<void> setMirrorFrontCamera(bool mirrorFrontCamera) {
     return CameraInterface().setMirrorFrontCamera(mirrorFrontCamera);
   }
+
+  // --- Manual Exposure Control ---
+
+  static const MethodChannel _manualExposureChannel =
+      MethodChannel('camerawesome/manual_exposure');
+
+  /// Enable or disable manual exposure mode.
+  /// When enabled, auto-exposure is turned off and ISO/shutter speed
+  /// can be set manually.
+  static Future<void> setManualExposureMode(bool manual) {
+    return _manualExposureChannel
+        .invokeMethod('setManualExposureMode', {'manual': manual});
+  }
+
+  /// Set ISO sensitivity. Must be within the range returned by [getExposureRange].
+  static Future<void> setIso(double iso) {
+    return _manualExposureChannel.invokeMethod('setIso', {'iso': iso});
+  }
+
+  /// Set exposure duration (shutter speed) in nanoseconds.
+  /// For example, 1/125s = 8,000,000 ns.
+  static Future<void> setExposureDuration(int durationNs) {
+    return _manualExposureChannel
+        .invokeMethod('setExposureDuration', {'durationNs': durationNs});
+  }
+
+  /// Set both ISO and exposure duration atomically.
+  static Future<void> setManualExposure(double iso, int durationNs) {
+    return _manualExposureChannel.invokeMethod(
+        'setManualExposure', {'iso': iso, 'durationNs': durationNs});
+  }
+
+  /// Get the exposure range supported by the current camera device.
+  /// Returns a map with keys: minIso, maxIso, minExposureDurationNs,
+  /// maxExposureDurationNs, currentIso, currentExposureDurationNs.
+  static Future<Map<String, dynamic>> getExposureRange() async {
+    final result = await _manualExposureChannel
+        .invokeMapMethod<String, dynamic>('getExposureRange');
+    return result ?? {};
+  }
 }

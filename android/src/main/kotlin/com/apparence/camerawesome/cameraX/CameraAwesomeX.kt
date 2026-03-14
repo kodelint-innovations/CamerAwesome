@@ -33,11 +33,18 @@ import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import androidx.camera.camera2.interop.Camera2CameraControl
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.CaptureRequestOptions
+import android.hardware.camera2.CaptureRequest
+import android.util.Range
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.FlutterPlugin.FlutterPluginBinding
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.EventChannel
+import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.MethodChannel
 import io.flutter.view.TextureRegistry
 import io.reactivex.rxjava3.disposables.Disposable
 import io.reactivex.rxjava3.subjects.BehaviorSubject
@@ -61,8 +68,10 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
     private var activity: Activity? = null
     private lateinit var imageStreamChannel: EventChannel
     private lateinit var orientationStreamChannel: EventChannel
+    private lateinit var manualExposureChannel: MethodChannel
     private var orientationStreamListener: OrientationStreamListener? = null
     private val sensorOrientationListener: SensorOrientationListener = SensorOrientationListener()
+    private var isManualExposureMode: Boolean = false
 
     private lateinit var cameraState: CameraXState
     private val cameraPermissions = CameraPermissions()
@@ -795,6 +804,158 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
     }
 
 
+    // --- Manual Exposure Control via Camera2 Interop ---
+
+    @SuppressLint("UnsafeOptInUsageError", "RestrictedApi")
+    private fun getCamera2CameraControl(): Camera2CameraControl? {
+        val camera = cameraState.concurrentCamera?.cameras?.firstOrNull()
+            ?: cameraState.previewCamera ?: return null
+        return Camera2CameraControl.from(camera.cameraControl)
+    }
+
+    @SuppressLint("UnsafeOptInUsageError", "RestrictedApi")
+    private fun getCamera2CameraInfo(): Camera2CameraInfo? {
+        val camera = cameraState.concurrentCamera?.cameras?.firstOrNull()
+            ?: cameraState.previewCamera ?: return null
+        return Camera2CameraInfo.from(camera.cameraInfo)
+    }
+
+    @SuppressLint("UnsafeOptInUsageError")
+    private fun handleManualExposureCall(call: MethodCall, result: MethodChannel.Result) {
+        try {
+            when (call.method) {
+                "setManualExposureMode" -> {
+                    val manual = call.argument<Boolean>("manual") ?: false
+                    isManualExposureMode = manual
+                    val control = getCamera2CameraControl()
+                    if (control == null) {
+                        result.error("NO_CAMERA", "Camera not initialized", null)
+                        return
+                    }
+                    if (manual) {
+                        val options = CaptureRequestOptions.Builder()
+                            .setCaptureRequestOption(
+                                CaptureRequest.CONTROL_AE_MODE,
+                                CaptureRequest.CONTROL_AE_MODE_OFF
+                            )
+                            .build()
+                        control.setCaptureRequestOptions(options)
+                    } else {
+                        // Restore auto exposure by clearing overrides
+                        val options = CaptureRequestOptions.Builder()
+                            .setCaptureRequestOption(
+                                CaptureRequest.CONTROL_AE_MODE,
+                                CaptureRequest.CONTROL_AE_MODE_ON
+                            )
+                            .clearCaptureRequestOption(CaptureRequest.SENSOR_SENSITIVITY)
+                            .clearCaptureRequestOption(CaptureRequest.SENSOR_EXPOSURE_TIME)
+                            .build()
+                        control.setCaptureRequestOptions(options)
+                    }
+                    result.success(null)
+                }
+                "setIso" -> {
+                    val iso = call.argument<Double>("iso") ?: run {
+                        result.error("INVALID_ARG", "iso is required", null)
+                        return
+                    }
+                    val control = getCamera2CameraControl()
+                    if (control == null) {
+                        result.error("NO_CAMERA", "Camera not initialized", null)
+                        return
+                    }
+                    val options = CaptureRequestOptions.Builder()
+                        .setCaptureRequestOption(
+                            CaptureRequest.SENSOR_SENSITIVITY,
+                            iso.toInt()
+                        )
+                        .build()
+                    control.setCaptureRequestOptions(options)
+                    result.success(null)
+                }
+                "setExposureDuration" -> {
+                    val durationNs = call.argument<Number>("durationNs")?.toLong() ?: run {
+                        result.error("INVALID_ARG", "durationNs is required", null)
+                        return
+                    }
+                    val control = getCamera2CameraControl()
+                    if (control == null) {
+                        result.error("NO_CAMERA", "Camera not initialized", null)
+                        return
+                    }
+                    val options = CaptureRequestOptions.Builder()
+                        .setCaptureRequestOption(
+                            CaptureRequest.SENSOR_EXPOSURE_TIME,
+                            durationNs
+                        )
+                        .build()
+                    control.setCaptureRequestOptions(options)
+                    result.success(null)
+                }
+                "setManualExposure" -> {
+                    val iso = call.argument<Double>("iso") ?: run {
+                        result.error("INVALID_ARG", "iso is required", null)
+                        return
+                    }
+                    val durationNs = call.argument<Number>("durationNs")?.toLong() ?: run {
+                        result.error("INVALID_ARG", "durationNs is required", null)
+                        return
+                    }
+                    val control = getCamera2CameraControl()
+                    if (control == null) {
+                        result.error("NO_CAMERA", "Camera not initialized", null)
+                        return
+                    }
+                    isManualExposureMode = true
+                    val options = CaptureRequestOptions.Builder()
+                        .setCaptureRequestOption(
+                            CaptureRequest.CONTROL_AE_MODE,
+                            CaptureRequest.CONTROL_AE_MODE_OFF
+                        )
+                        .setCaptureRequestOption(
+                            CaptureRequest.SENSOR_SENSITIVITY,
+                            iso.toInt()
+                        )
+                        .setCaptureRequestOption(
+                            CaptureRequest.SENSOR_EXPOSURE_TIME,
+                            durationNs
+                        )
+                        .build()
+                    control.setCaptureRequestOptions(options)
+                    result.success(null)
+                }
+                "getExposureRange" -> {
+                    val info = getCamera2CameraInfo()
+                    if (info == null) {
+                        result.error("NO_CAMERA", "Camera not initialized", null)
+                        return
+                    }
+                    val characteristics = Camera2CameraInfo.extractCameraCharacteristics(
+                        (cameraState.concurrentCamera?.cameras?.firstOrNull()
+                            ?: cameraState.previewCamera)!!.cameraInfo
+                    )
+                    val isoRange: Range<Int>? =
+                        characteristics.get(CameraCharacteristics.SENSOR_INFO_SENSITIVITY_RANGE)
+                    val exposureRange: Range<Long>? =
+                        characteristics.get(CameraCharacteristics.SENSOR_INFO_EXPOSURE_TIME_RANGE)
+
+                    val resultMap = hashMapOf<String, Any>(
+                        "minIso" to (isoRange?.lower?.toDouble() ?: 100.0),
+                        "maxIso" to (isoRange?.upper?.toDouble() ?: 3200.0),
+                        "minExposureDurationNs" to (exposureRange?.lower ?: 1000L),
+                        "maxExposureDurationNs" to (exposureRange?.upper ?: 1000000000L),
+                        "currentIso" to (isoRange?.lower?.toDouble() ?: 100.0),
+                        "currentExposureDurationNs" to 0L,
+                    )
+                    result.success(resultMap)
+                }
+                else -> result.notImplemented()
+            }
+        } catch (e: Exception) {
+            result.error("MANUAL_EXPOSURE_ERROR", e.message, e.stackTraceToString())
+        }
+    }
+
     //    FLUTTER ATTACHMENTS
     override fun onAttachedToEngine(binding: FlutterPluginBinding) {
         this.binding = binding
@@ -811,6 +972,10 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
         EventChannel(binding.binaryMessenger, "camerawesome/physical_button").setStreamHandler(
             physicalButtonHandler
         )
+        manualExposureChannel = MethodChannel(binding.binaryMessenger, "camerawesome/manual_exposure")
+        manualExposureChannel.setMethodCallHandler { call, result ->
+            handleManualExposureCall(call, result)
+        }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPluginBinding) {

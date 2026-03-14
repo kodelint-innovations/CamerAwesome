@@ -68,6 +68,13 @@ AVCaptureAudioDataOutputSampleBufferDelegate>
 - (void)setOrientationEventSink:(FlutterEventSink)orientationEventSink;
 - (void)setPhysicalButtonEventSink:(FlutterEventSink)physicalButtonEventSink;
 
+// Manual exposure control
+- (void)setManualExposureMode:(BOOL)manual error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (void)setIso:(double)iso error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (void)setExposureDuration:(int64_t)durationNs error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (void)setManualExposureIso:(double)iso durationNs:(int64_t)durationNs error:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+- (NSDictionary *)getExposureRangeWithError:(FlutterError * _Nullable __autoreleasing * _Nonnull)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

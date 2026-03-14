@@ -19,6 +19,7 @@ FlutterEventSink physicalButtonEventSink;
 @property NSMutableArray<NSNumber *> *texturesIds;
 @property SingleCameraPreview *camera;
 @property MultiCameraPreview *multiCamera;
+@property FlutterMethodChannel *manualExposureChannel;
 - (instancetype)init:(NSObject<FlutterPluginRegistrar>*)registrar;
 @end
 
@@ -61,6 +62,12 @@ FlutterEventSink physicalButtonEventSink;
   
   CameraInterfaceSetup(registrar.messenger, instance);
   AnalysisImageUtilsSetup(registrar.messenger, instance);
+
+  instance.manualExposureChannel = [FlutterMethodChannel methodChannelWithName:@"camerawesome/manual_exposure"
+                                                              binaryMessenger:[registrar messenger]];
+  [instance.manualExposureChannel setMethodCallHandler:^(FlutterMethodCall * _Nonnull call, FlutterResult  _Nonnull result) {
+    [instance handleManualExposureCall:call result:result];
+  }];
 }
 
 #pragma mark - Camera engine methods
@@ -755,6 +762,67 @@ FlutterEventSink physicalButtonEventSink;
 
 - (void)yuv420toNv21YuvImage:(nonnull AnalysisImageWrapper *)yuvImage completion:(nonnull void (^)(AnalysisImageWrapper * _Nullable, FlutterError * _Nullable))completion {
   [AnalysisController yuv420toNv21YuvImage:yuvImage completion:completion];
+}
+
+#pragma mark - Manual Exposure Control
+
+- (void)handleManualExposureCall:(FlutterMethodCall *)call result:(FlutterResult)result {
+  if (self.camera == nil && self.multiCamera == nil) {
+    result([FlutterError errorWithCode:@"CAMERA_MUST_BE_INIT" message:@"init must be called before manual exposure" details:nil]);
+    return;
+  }
+
+  FlutterError *error = nil;
+
+  if ([call.method isEqualToString:@"setManualExposureMode"]) {
+    BOOL manual = [call.arguments[@"manual"] boolValue];
+    if (self.multiCamera != nil) {
+      [self.multiCamera setManualExposureMode:manual error:&error];
+    } else {
+      [self.camera setManualExposureMode:manual error:&error];
+    }
+    if (error) { result(error); } else { result(nil); }
+
+  } else if ([call.method isEqualToString:@"setIso"]) {
+    double iso = [call.arguments[@"iso"] doubleValue];
+    if (self.multiCamera != nil) {
+      [self.multiCamera setIso:iso error:&error];
+    } else {
+      [self.camera setIso:iso error:&error];
+    }
+    if (error) { result(error); } else { result(nil); }
+
+  } else if ([call.method isEqualToString:@"setExposureDuration"]) {
+    int64_t durationNs = [call.arguments[@"durationNs"] longLongValue];
+    if (self.multiCamera != nil) {
+      [self.multiCamera setExposureDuration:durationNs error:&error];
+    } else {
+      [self.camera setExposureDuration:durationNs error:&error];
+    }
+    if (error) { result(error); } else { result(nil); }
+
+  } else if ([call.method isEqualToString:@"setManualExposure"]) {
+    double iso = [call.arguments[@"iso"] doubleValue];
+    int64_t durationNs = [call.arguments[@"durationNs"] longLongValue];
+    if (self.multiCamera != nil) {
+      [self.multiCamera setManualExposureIso:iso durationNs:durationNs error:&error];
+    } else {
+      [self.camera setManualExposureIso:iso durationNs:durationNs error:&error];
+    }
+    if (error) { result(error); } else { result(nil); }
+
+  } else if ([call.method isEqualToString:@"getExposureRange"]) {
+    NSDictionary *rangeInfo;
+    if (self.multiCamera != nil) {
+      rangeInfo = [self.multiCamera getExposureRangeWithError:&error];
+    } else {
+      rangeInfo = [self.camera getExposureRangeWithError:&error];
+    }
+    if (error) { result(error); } else { result(rangeInfo); }
+
+  } else {
+    result(FlutterMethodNotImplemented);
+  }
 }
 
 @end

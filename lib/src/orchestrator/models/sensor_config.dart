@@ -172,6 +172,33 @@ class SensorConfig {
   /// Returns the current brightness without stream
   double get brightness => _brightnessController.value;
 
+  // --- Manual Exposure Control ---
+
+  /// Enable manual exposure mode (disables auto-exposure).
+  Future<void> setManualExposureMode(bool manual) {
+    return CamerawesomePlugin.setManualExposureMode(manual);
+  }
+
+  /// Set ISO sensitivity manually.
+  Future<void> setIso(double iso) {
+    return CamerawesomePlugin.setIso(iso);
+  }
+
+  /// Set exposure duration (shutter speed) in nanoseconds.
+  Future<void> setExposureDuration(int durationNs) {
+    return CamerawesomePlugin.setExposureDuration(durationNs);
+  }
+
+  /// Set both ISO and exposure duration atomically.
+  Future<void> setManualExposure(double iso, int durationNs) {
+    return CamerawesomePlugin.setManualExposure(iso, durationNs);
+  }
+
+  /// Get the exposure range supported by the current camera.
+  Future<Map<String, dynamic>> getExposureRange() {
+    return CamerawesomePlugin.getExposureRange();
+  }
+
   void dispose() {
     _brightnessSubscription?.cancel();
     _brightnessController.close();
