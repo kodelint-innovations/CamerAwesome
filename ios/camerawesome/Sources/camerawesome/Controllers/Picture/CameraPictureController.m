@@ -125,7 +125,7 @@ previewPhotoSampleBuffer:(CMSampleBufferRef)previewPhotoSampleBuffer
   
   image = [UIImage imageWithCGImage:[imageConverted CGImage] scale:0.0 orientation:[self getJpegOrientation]];
 
-  NSData *imageWithExif = [UIImageJPEGRepresentation(image, 1.0) addExif:container];
+  NSData *imageWithExif = [UIImageJPEGRepresentation(image, 0.92) addExif:container];
   
   bool success = [imageWithExif writeToFile:_path atomically:YES];
   if (!success) {

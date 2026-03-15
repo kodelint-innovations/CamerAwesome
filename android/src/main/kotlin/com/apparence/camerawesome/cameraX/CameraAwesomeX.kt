@@ -414,7 +414,7 @@ class CameraAwesomeX : CameraInterface, FlutterPlugin, ActivityAware {
                         try {
                             FileOutputStream(outputFileResults.savedUri?.path).use { out ->
                                 bitmapCopy.compress(
-                                    Bitmap.CompressFormat.JPEG, 100, out
+                                    Bitmap.CompressFormat.JPEG, 92, out
                                 )
                             }
                             exif.saveAttributes()

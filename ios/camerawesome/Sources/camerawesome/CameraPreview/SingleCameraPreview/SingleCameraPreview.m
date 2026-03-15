@@ -518,7 +518,7 @@
   // Create settings instance
   AVCapturePhotoSettings *settings = [AVCapturePhotoSettings photoSettings];
   [settings setFlashMode:_flashMode];
-  [settings setHighResolutionPhotoEnabled:YES];
+  [settings setHighResolutionPhotoEnabled:NO];
   
   [_capturePhotoOutput capturePhotoWithSettings:settings
                                        delegate:cameraPicture];

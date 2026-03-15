@@ -142,7 +142,8 @@ data class CameraXState(
 
                 if (currentCaptureMode == CaptureModes.PHOTO) {
                     val imageCapture = ImageCapture.Builder()
-//                .setJpegQuality(100)
+                        .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                        .setJpegQuality(92)
                         .apply {
                             if (rational.denominator != rational.numerator) {
                                 setResolutionSelector(resolutionSelector)
@@ -215,7 +216,8 @@ data class CameraXState(
 
             if (currentCaptureMode == CaptureModes.PHOTO) {
                 val imageCapture = ImageCapture.Builder()
-//                .setJpegQuality(100)
+                    .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
+                    .setJpegQuality(92)
                     .apply {
                         //photoSize?.let { setTargetResolution(it) }
                         if (rational.denominator != rational.numerator) {
@@ -272,10 +274,10 @@ data class CameraXState(
     }
 
     private fun getResolutionSelector(aspectRatio: Int): ResolutionSelector {
-        val resolutionStrategy = when (aspectRatio) {
-            AspectRatio.RATIO_16_9 -> ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
-            AspectRatio.RATIO_4_3 -> ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
-            else -> ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
+        val resolutionStrategy = if (photoSize != null) {
+            ResolutionStrategy(photoSize!!, ResolutionStrategy.FALLBACK_RULE_CLOSEST_LOWER_THEN_HIGHER)
+        } else {
+            ResolutionStrategy.HIGHEST_AVAILABLE_STRATEGY
         }
 
         return ResolutionSelector.Builder()
